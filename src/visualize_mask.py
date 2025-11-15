@@ -41,7 +41,7 @@ def visualize_mask(image: torch.Tensor, mask: torch.Tensor, filename: str, num_c
     output_path = output_dir / filename
     output_image.save(output_path)
 
-def main(index: int, model_id: Optional[Literal["resnet50-fcn"]] = None):
+def main(index: int, model_id: Optional[Literal["resnet50-fcn", "chungusnet"]] = None):
     from dataset import VOC2012SegmentationDataset, dataset_path
     from torchvision.models.segmentation import FCN_ResNet50_Weights, fcn_resnet50
     from torchmetrics import JaccardIndex
@@ -74,6 +74,30 @@ def main(index: int, model_id: Optional[Literal["resnet50-fcn"]] = None):
         # Visualize predicted mask
         visualize_mask(image, pred_mask, f"{model_id}-mask-{index}.png")
         print(f"Saved predicted mask to mask-images/pred-mask-{index}.png")
+    elif model_id == "chungusnet":
+        from chungusnet import ChungusNet
+
+        # Load ChungusNet model (pretrained backbone)
+        model = ChungusNet(num_classes=21, pretrained=True)
+        model.eval()
+
+        # Run inference
+        with torch.no_grad():
+            # Add batch dimension and run model
+            input_batch = image.unsqueeze(0)
+            output = model(input_batch)
+            # Extract segmentation mask (ChungusNet returns raw logits)
+            pred_mask = output.squeeze(0).argmax(0)
+
+        # Calculate mIoU using torchmetrics
+        # JaccardIndex with ignore_index=255 to handle boundary/ignore pixels
+        jaccard = JaccardIndex(task='multiclass', num_classes=21, ignore_index=255)
+        miou = jaccard(pred_mask, gt_mask)
+        print(f"Mean IoU: {miou}")
+
+        # Visualize predicted mask
+        visualize_mask(image, pred_mask, f"{model_id}-mask-{index}.png")
+        print(f"Saved predicted mask to mask-images/{model_id}-mask-{index}.png")
     else:
         visualize_mask(image, gt_mask, f"gt-mask-{index}.png")
         print(f"Saved ground truth mask to mask-images/gt-mask-{index}.png")
