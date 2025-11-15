@@ -68,7 +68,7 @@ def main(index: int, model_id: Optional[Literal["resnet50-fcn"]] = None):
         # JaccardIndex with ignore_index=255 to handle boundary/ignore pixels
         jaccard = JaccardIndex(task='multiclass', num_classes=21, ignore_index=255)
         # Add batch dimension for torchmetrics
-        miou = jaccard(pred_mask.unsqueeze(0), gt_mask.unsqueeze(0))
+        miou = jaccard(pred_mask, gt_mask)
         print(f"Mean IoU: {miou}")
 
         # Visualize predicted mask
