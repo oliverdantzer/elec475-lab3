@@ -59,13 +59,18 @@ class VOC2012SegmentationDataset(Dataset):
             self.image_ids = [line.strip() for line in f.readlines()]
 
         # https://docs.pytorch.org/vision/main/models/generated/torchvision.models.segmentation.fcn_resnet50.html#torchvision.models.segmentation.FCN_ResNet50_Weights
-        self.img_transform = FCN_ResNet50_Weights.COCO_WITH_VOC_LABELS_V1.transforms()
-        img_size = 520
+        # Get the pretrained weights transform, which includes resize and normalization
+        weights_transform = FCN_ResNet50_Weights.COCO_WITH_VOC_LABELS_V1.transforms()
 
-        # Base mask transform
+        # Extract the resize transform to apply to both image and mask
+        # The weights transform resizes to (520, 520) with aspect ratio preservation
+        self.img_transform = weights_transform
+
+        # For mask, we need to apply the same resize but without normalization
+        # Use the resize parameters from the weights transform
+        img_size = 520
         self.mask_transform = transforms.Compose([
-            transforms.Resize((img_size, img_size),
-                              interpolation=transforms.InterpolationMode.NEAREST),
+            transforms.Resize(img_size, interpolation=transforms.InterpolationMode.NEAREST),
             transforms.PILToTensor(),
             transforms.Lambda(lambda x: x.squeeze(0).long())
         ])
