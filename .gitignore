@@ -1,0 +1,6 @@
+venv/
+data/
+**/**.pyc
+**/__pycache__/
+weights/
+images/
