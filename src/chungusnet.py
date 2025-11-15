@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import mobilenet_v3_large, MobileNet_V3_Large_Weights
+from torchvision.models import mobilenet_v3_small, MobileNet_V3_Small_Weights
 
 
 class LightFusionBlock(nn.Module):
@@ -31,7 +31,7 @@ class ChungusNet(nn.Module):
     ChungusNet: Semantic Segmentation Model
 
     Architecture:
-    - Backbone: MobileNetV3-Large (chopped to 14x14 bottleneck)
+    - Backbone: MobileNetV3-Small (chopped to 14x14 bottleneck)
     - Decoder: Ultra-lightweight with only 2 taps and bilinear upsampling
     - Output: 520x520x21 semantic segmentation mask
 
@@ -44,12 +44,12 @@ class ChungusNet(nn.Module):
         super().__init__()
         self.num_classes = num_classes
 
-        # Load MobileNetV3-Large backbone
+        # Load MobileNetV3-Small backbone
         if pretrained:
-            weights = MobileNet_V3_Large_Weights.IMAGENET1K_V1
-            backbone = mobilenet_v3_large(weights=weights)
+            weights = MobileNet_V3_Small_Weights.IMAGENET1K_V1
+            backbone = mobilenet_v3_small(weights=weights)
         else:
-            backbone = mobilenet_v3_large(weights=None)
+            backbone = mobilenet_v3_small(weights=None)
 
         # Extract feature layers from MobileNetV3
         # MobileNetV3 features structure:
@@ -62,17 +62,17 @@ class ChungusNet(nn.Module):
 
         # Use only 2 taps for lighter architecture
         # Assuming input is 520x520:
-        # - Tap 1 (early): 65x65 (stride 8) - features[:7]
-        # - Tap 2 (bottleneck): ~14x14 (stride ~37) - features[:16]
+        # - Tap 1 (early): 65x65 (stride 8) - features[:4]
+        # - Tap 2 (bottleneck): ~14x14 (stride ~37) - features[:12]
 
         # Define channel dimensions
-        # MobileNetV3-Large channel progression: 16, 24, 40, 80, 112, 160, 960
-        self.early_channels = 40   # features[:7]
-        self.bottleneck_channels = 960  # features[:16] (chopped backbone)
+        # MobileNetV3-Small channel progression: 16, 16, 24, 48, 576
+        self.early_channels = 24   # features[:4]
+        self.bottleneck_channels = 576  # features[:12] (chopped backbone)
 
         # Encoder with only 2 stages
-        self.encoder_early = nn.Sequential(*self.features[:7])  # -> 65x65x40
-        self.encoder_bottleneck = nn.Sequential(*self.features[7:16]) # -> ~14x14x960
+        self.encoder_early = nn.Sequential(*self.features[:4])  # -> 65x65x24
+        self.encoder_bottleneck = nn.Sequential(*self.features[4:12]) # -> ~14x14x576
 
         # Lightweight decoder with only 2 taps
         # Decoder path: 14x14 -> 65x65 -> 520x520
@@ -101,8 +101,8 @@ class ChungusNet(nn.Module):
         input_size = x.shape[2:]  # (520, 520)
 
         # Encoder: Extract features at 2 taps only
-        early = self.encoder_early(x)  # (B, 40, 65, 65)
-        bottleneck = self.encoder_bottleneck(early)  # (B, 960, ~14, ~14)
+        early = self.encoder_early(x)  # (B, 24, 65, 65)
+        bottleneck = self.encoder_bottleneck(early)  # (B, 576, ~14, ~14)
 
         # Reduce bottleneck channels
         x = self.bottleneck_reduce(bottleneck)  # (B, 64, ~14, ~14)
