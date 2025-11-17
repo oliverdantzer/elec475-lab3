@@ -1,3 +1,4 @@
 kagglehub
 typer
 torchvision
+torchmetrics
