@@ -1,10 +1,19 @@
 import kagglehub
 import os
+from pathlib import Path
 
 # Download latest version
 path = kagglehub.dataset_download("gopalbhattrai/pascal-voc-2012-dataset")
 
 print("Path to dataset files:", path)
+
+# Create .env file with the dataset path
+env_file = Path(__file__).parent.parent / ".env"
+with open(env_file, "w") as f:
+    f.write(f"DATASET_PATH={path}\n")
+
+print(f"\nCreated .env file at: {env_file}")
+print(f"Set DATASET_PATH={path}")
 
 # List files in the dataset directory
 print("\nDataset contents:")

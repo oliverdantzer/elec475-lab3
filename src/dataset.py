@@ -9,9 +9,18 @@ import torchvision.transforms.functional as F
 
 import numpy as np
 from torchvision.models.segmentation import FCN_ResNet50_Weights
+from dotenv import load_dotenv
 
-dataset_path = Path(os.path.expanduser(
-    "~/.cache/kagglehub/datasets/gopalbhattrai/pascal-voc-2012-dataset"))
+# Load environment variables from .env file
+load_dotenv(Path(__file__).parent.parent / ".env")
+
+# Get dataset path from environment variable
+dataset_path = Path(os.getenv("DATASET_PATH", ""))
+if not dataset_path or not dataset_path.exists():
+    raise ValueError(
+        "DATASET_PATH not found in .env file or path doesn't exist. "
+        "Please run download_dataset.py first to download the dataset and create the .env file."
+    )
 
 
 class VOC2012SegmentationDataset(Dataset):
