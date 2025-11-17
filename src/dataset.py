@@ -37,12 +37,13 @@ class VOC2012SegmentationDataset(Dataset):
         root_dir: str,
         split: str = 'train',
         use_augmentation: bool = False,
+        crop_size: int = 520,
     ):
         self.root_dir = Path(root_dir) / \
             "versions/1/VOC2012_train_val/VOC2012_train_val"
         self.split = split
         self.use_augmentation = use_augmentation
-        self.crop_size = 520
+        self.crop_size = crop_size
 
         # Paths to different components
         self.images_dir = self.root_dir / "JPEGImages"
@@ -104,8 +105,8 @@ class VOC2012SegmentationDataset(Dataset):
         # Step 2: Crop to crop_size x crop_size
         if self.use_augmentation:
             # Random crop for training
-            i = np.random.randint(0, new_h - self.crop_size + 1)
-            j = np.random.randint(0, new_w - self.crop_size + 1)
+            i = torch.randint(0, new_h - self.crop_size + 1, (1,)).item()
+            j = torch.randint(0, new_w - self.crop_size + 1, (1,)).item()
         else:
             # Top-left crop for validation
             i = 0
@@ -117,7 +118,7 @@ class VOC2012SegmentationDataset(Dataset):
         # Step 3: Apply augmentations if enabled
         if self.use_augmentation:
             # Random horizontal flip
-            if np.random.rand() < 0.5:
+            if torch.rand(1).item() < 0.5:
                 image = F.hflip(image)
                 mask = F.hflip(mask)
 
@@ -139,7 +140,7 @@ def create_dataloaders(
     root_dir: str,
     batch_size: int = 8,
     num_workers: int = 0,
-    img_size: int = 256,
+    crop_size: int = 520,
     use_augmentation: bool = False,
 ) -> Tuple[DataLoader, DataLoader]:
     """
@@ -149,7 +150,7 @@ def create_dataloaders(
         root_dir: Root directory of the dataset
         batch_size: Batch size for dataloaders
         num_workers: Number of workers for data loading
-        img_size: Size to resize images to
+        crop_size: Size to crop images to (images resized so shortest side >= crop_size, then cropped)
         use_augmentation: Whether to apply data augmentation to training set
 
     Returns:
@@ -160,12 +161,14 @@ def create_dataloaders(
         root_dir=root_dir,
         split='train',
         use_augmentation=use_augmentation,
+        crop_size=crop_size,
     )
 
     val_dataset = VOC2012SegmentationDataset(
         root_dir=root_dir,
         split='val',
         use_augmentation=False,  # Never augment validation set
+        crop_size=crop_size,
     )
 
     # Create dataloaders
@@ -196,7 +199,7 @@ if __name__ == "__main__":
     train_loader, val_loader = create_dataloaders(
         root_dir=str(dataset_path),
         batch_size=8,
-        img_size=256
+        crop_size=520
     )
 
     print(f"Number of training batches: {len(train_loader)}")
