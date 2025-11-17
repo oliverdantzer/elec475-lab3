@@ -66,16 +66,16 @@ class ChungusNet(nn.Module):
         # - Tap 2 (bottleneck): ~14x14 (stride ~37) - features[:12]
 
         # Define channel dimensions
-        # MobileNetV3-Small channel progression: 16, 16, 24, 48, 576
+        # MobileNetV3-Small channel progression: 16, 16, 24, 48, 96
         self.early_channels = 24   # features[:4]
-        self.bottleneck_channels = 576  # features[:12] (chopped backbone)
+        self.bottleneck_channels = 96  # features[:12] (chopped backbone)
 
         # Encoder with only 2 stages
         self.encoder_early = nn.Sequential(*self.features[:4])  # -> 65x65x24
-        self.encoder_bottleneck = nn.Sequential(*self.features[4:12]) # -> ~14x14x576
+        self.encoder_bottleneck = nn.Sequential(*self.features[4:12]) # -> 17x17x96
 
         # Lightweight decoder with only 2 taps
-        # Decoder path: 14x14 -> 65x65 -> 520x520
+        # Decoder path: 17x17 -> 65x65 -> 520x520
 
         # Reduce bottleneck channels (lighter than before)
         self.bottleneck_reduce = nn.Conv2d(self.bottleneck_channels, 64, kernel_size=1, bias=False)
@@ -102,10 +102,10 @@ class ChungusNet(nn.Module):
 
         # Encoder: Extract features at 2 taps only
         early = self.encoder_early(x)  # (B, 24, 65, 65)
-        bottleneck = self.encoder_bottleneck(early)  # (B, 576, ~14, ~14)
+        bottleneck = self.encoder_bottleneck(early)  # (B, 96, 17, 17)
 
         # Reduce bottleneck channels
-        x = self.bottleneck_reduce(bottleneck)  # (B, 64, ~14, ~14)
+        x = self.bottleneck_reduce(bottleneck)  # (B, 64, 17, 17)
 
         # Upsample to early feature resolution
         x = F.interpolate(x, size=early.shape[2:], mode='bilinear', align_corners=False)  # (B, 64, 65, 65)
