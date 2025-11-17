@@ -81,7 +81,7 @@ def main(model_id: Literal["resnet50-fcn", "chungusnet"], batch_size: int, param
                 elapsed_time = current_time - start_test_time
                 elapsed_mins = int(elapsed_time // 60)
                 elapsed_secs = int(elapsed_time % 60)
-                print(f"Progress: {images_tested}/{total_images} images ({percent_complete:.1f}%) | Current mIoU: {current_miou:.4f} | Time: {elapsed_mins}m {elapsed_secs}s")
+                print(f"Progress: {images_tested}/{total_images} images ({percent_complete:.1f}%) | Avg mIoU: {current_miou:.4f} | Time: {elapsed_mins}m {elapsed_secs}s")
                 last_log_time = current_time
 
     # Sort by mIoU score
