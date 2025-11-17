@@ -1,4 +1,5 @@
-import argparse
+import typer
+from typing import Literal
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -286,27 +287,18 @@ def save_miou_plot(train_mious, val_mious, weights_file):
     print(f"\nPlot saved to: {plot_path}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Train ChungusNet for semantic segmentation')
-    parser.add_argument('--mode', type=str, required=True, choices=['solo', 'student-teacher'],
-                        help='Training mode: solo or student-teacher')
-    parser.add_argument('--weights_file', type=str, required=True,
-                        help='Path to save model weights')
-    parser.add_argument('--epochs', type=int, default=50,
-                        help='Number of training epochs (default: 50)')
-    parser.add_argument('--batch_size', type=int, default=8,
-                        help='Batch size (default: 8)')
-    parser.add_argument('--lr', type=float, default=1e-3,
-                        help='Learning rate (default: 1e-3)')
-    parser.add_argument('--num_workers', type=int, default=4,
-                        help='Number of data loading workers (default: 4)')
-    parser.add_argument('--device', type=str, default='cuda',
-                        help='Device to use (default: cuda)')
-
-    args = parser.parse_args()
+def main(
+    mode: Literal["solo", "student-teacher"],
+    weights_file: str,
+    epochs: int = 50,
+    batch_size: int = 8,
+    lr: float = 1e-3,
+    num_workers: int = 4,
+    device: str = "cuda"
+):
 
     # Setup device
-    device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
+    device = torch.device(device if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
     # Create model
@@ -318,15 +310,15 @@ def main():
     print("Loading dataset...")
     train_loader, val_loader = create_dataloaders(
         root_dir=str(dataset_path),
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
+        batch_size=batch_size,
+        num_workers=num_workers,
         use_augmentation=True
     )
     print(f"Training samples: {len(train_loader.dataset)}")
     print(f"Validation samples: {len(val_loader.dataset)}")
 
     # Setup training based on mode
-    if args.mode == 'solo':
+    if mode == 'solo':
         print("\n=== SOLO TRAINING MODE ===")
         criterion = nn.CrossEntropyLoss(ignore_index=255)
         teacher = None
@@ -338,30 +330,30 @@ def main():
         teacher = load_teacher_model(device)
 
     # Setup optimizer and scheduler
-    optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
-    scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
+    optimizer = AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    scheduler = CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
 
     # Setup metrics
     train_metric = JaccardIndex(task='multiclass', num_classes=21, ignore_index=255).to(device)
     val_metric = JaccardIndex(task='multiclass', num_classes=21, ignore_index=255).to(device)
 
-    print(f"\nOptimizer: AdamW (lr={args.lr}, weight_decay=1e-4)")
-    print(f"Scheduler: CosineAnnealingLR (T_max={args.epochs}, eta_min=1e-6)")
-    print(f"Epochs: {args.epochs}")
-    print(f"Batch size: {args.batch_size}\n")
+    print(f"\nOptimizer: AdamW (lr={lr}, weight_decay=1e-4)")
+    print(f"Scheduler: CosineAnnealingLR (T_max={epochs}, eta_min=1e-6)")
+    print(f"Epochs: {epochs}")
+    print(f"Batch size: {batch_size}\n")
 
     # Training loop
     best_miou = 0.0
     train_mious = []
     val_mious = []
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(1, epochs + 1):
         print(f"\n{'='*60}")
-        print(f"Epoch {epoch}/{args.epochs} | LR: {scheduler.get_last_lr()[0]:.6f}")
+        print(f"Epoch {epoch}/{epochs} | LR: {scheduler.get_last_lr()[0]:.6f}")
         print(f"{'='*60}")
 
         # Train
-        if args.mode == 'solo':
+        if mode == 'solo':
             train_loss, train_miou = train_epoch_solo(
                 model, train_loader, criterion, optimizer, train_metric, device, epoch
             )
@@ -393,13 +385,13 @@ def main():
                 'scheduler_state_dict': scheduler.state_dict(),
                 'val_miou': val_miou,
                 'val_loss': val_loss,
-                'mode': args.mode
-            }, args.weights_file)
+                'mode': mode
+            }, weights_file)
             print(f"✓ Saved best model (mIoU: {best_miou:.4f})")
 
         # Save checkpoint every 10 epochs
         if epoch % 10 == 0:
-            checkpoint_path = args.weights_file.replace('.pth', f'_epoch{epoch}.pth')
+            checkpoint_path = weights_file.replace('.pth', f'_epoch{epoch}.pth')
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
@@ -407,19 +399,19 @@ def main():
                 'scheduler_state_dict': scheduler.state_dict(),
                 'val_miou': val_miou,
                 'val_loss': val_loss,
-                'mode': args.mode
+                'mode': mode
             }, checkpoint_path)
             print(f"✓ Saved checkpoint at epoch {epoch}")
 
     print(f"\n{'='*60}")
     print(f"Training completed!")
     print(f"Best validation mIoU: {best_miou:.4f}")
-    print(f"Model saved to: {args.weights_file}")
+    print(f"Model saved to: {weights_file}")
     print(f"{'='*60}")
 
     # Save mIoU plot
-    save_miou_plot(train_mious, val_mious, args.weights_file)
+    save_miou_plot(train_mious, val_mious, weights_file)
 
 
 if __name__ == '__main__':
-    main()
+    typer.run(main)
