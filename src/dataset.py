@@ -47,7 +47,8 @@ class VOC2012SegmentationDataset(Dataset):
                 "Please run download_dataset.py first to download the dataset and create the .env file."
             )
 
-        self.root_dir = dataset_path
+        # The actual VOC2012 dataset is nested in VOC2012_train_val/VOC2012_train_val/
+        self.root_dir = dataset_path / "VOC2012_train_val" / "VOC2012_train_val"
         self.split = split
         self.use_augmentation = use_augmentation
         self.crop_size = crop_size
@@ -198,7 +199,7 @@ def create_dataloaders(
 if __name__ == "__main__":
     # Get dataset path from environment
     dataset_path = Path(os.getenv("DATASET_PATH", ""))
-    print(f"Dataset path: {dataset_path}")
+    print(f"Dataset path: {dataset_path / 'VOC2012_train_val' / 'VOC2012_train_val'}")
 
     # Create dataloaders
     train_loader, val_loader = create_dataloaders(
