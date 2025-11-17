@@ -40,8 +40,13 @@ def main(model_id: Literal["resnet50-fcn", "chungusnet"], batch_size: int, param
     miou_scores = []
     inference_times = []
 
+    total_images = len(val_dataset)
+    images_tested = 0
+    last_log_time = time.time()
+
     print(f"Testing {model_id} on validation set...")
     print(f"Device: {device}")
+    print(f"Total images in validation set: {total_images}")
 
     with torch.no_grad():
         for batch_idx, (images, targets) in enumerate(val_loader):
@@ -64,6 +69,16 @@ def main(model_id: Literal["resnet50-fcn", "chungusnet"], batch_size: int, param
             for i in range(images.size(0)):
                 miou = jaccard(pred_masks[i].cpu(), targets[i].cpu()).item()
                 miou_scores.append((batch_idx * batch_size + i, miou))
+
+            images_tested += images.size(0)
+
+            # Log progress every 15 seconds
+            current_time = time.time()
+            if current_time - last_log_time >= 15:
+                current_miou = np.mean([score for _, score in miou_scores])
+                percent_complete = (images_tested / total_images) * 100
+                print(f"Progress: {images_tested}/{total_images} images ({percent_complete:.1f}%) | Current mIoU: {current_miou:.4f}")
+                last_log_time = current_time
 
     # Sort by mIoU score
     miou_scores.sort(key=lambda x: x[1])
