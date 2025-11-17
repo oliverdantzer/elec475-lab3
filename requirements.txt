@@ -3,3 +3,4 @@ typer
 torchvision
 torchmetrics
 python-dotenv
+torchinfo

@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import mobilenet_v3_small, MobileNet_V3_Small_Weights
 
-
 class LightFusionBlock(nn.Module):
     """Ultra-lightweight fusion block with depthwise separable convolution"""
 
@@ -122,4 +121,11 @@ class ChungusNet(nn.Module):
         x = self.seg_head(x)  # (B, num_classes, 520, 520)
 
         return x
+
+
+if __name__ == "__main__":
+    from torchinfo import summary
+    model = ChungusNet()
+    batch_size = 16
+    summary(model, input_size=(batch_size, 3, 520, 520))
 
