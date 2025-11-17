@@ -31,8 +31,6 @@ class VOC2012SegmentationDataset(Dataset):
         'horse', 'motorbike', 'person', 'pottedplant', 'sheep',
         'sofa', 'train', 'tvmonitor'
     ]
-    img_transform: transforms.Compose
-    mask_transform: transforms.Compose
 
     def __init__(
         self,
@@ -44,6 +42,7 @@ class VOC2012SegmentationDataset(Dataset):
             "versions/1/VOC2012_train_val/VOC2012_train_val"
         self.split = split
         self.use_augmentation = use_augmentation
+        self.crop_size = 520
 
         # Paths to different components
         self.images_dir = self.root_dir / "JPEGImages"
@@ -58,36 +57,23 @@ class VOC2012SegmentationDataset(Dataset):
         with open(split_file, 'r') as f:
             self.image_ids = [line.strip() for line in f.readlines()]
 
+        # Get normalization parameters from pretrained weights
         # https://docs.pytorch.org/vision/main/models/generated/torchvision.models.segmentation.fcn_resnet50.html#torchvision.models.segmentation.FCN_ResNet50_Weights
-        # Get the pretrained weights transform, which includes resize and normalization
-        weights_transform = FCN_ResNet50_Weights.COCO_WITH_VOC_LABELS_V1.transforms()
+        self.normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
 
-        # Extract the resize transform to apply to both image and mask
-        # The weights transform resizes to (520, 520) with aspect ratio preservation
-        self.img_transform = weights_transform
-
-        # For mask, we need to apply the same resize but without normalization
-        # Use the resize parameters from the weights transform
-        img_size = 520
-        self.mask_transform = transforms.Compose([
-            transforms.Resize(img_size, interpolation=transforms.InterpolationMode.NEAREST),
-            transforms.PILToTensor(),
-            transforms.Lambda(lambda x: x.squeeze(0).long())
-        ])
-
-        # Data augmentation transforms (applied before img_transform)
+        # Color jitter for augmentation
         if use_augmentation:
-            self.augmentation = transforms.Compose([
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ColorJitter(
-                    brightness=0.3,
-                    contrast=0.3,
-                    saturation=0.3,
-                    hue=0.1
-                ),
-            ])
+            self.color_jitter = transforms.ColorJitter(
+                brightness=0.3,
+                contrast=0.3,
+                saturation=0.3,
+                hue=0.1
+            )
         else:
-            self.augmentation = None
+            self.color_jitter = None
 
     def __len__(self) -> int:
         return len(self.image_ids)
@@ -103,25 +89,48 @@ class VOC2012SegmentationDataset(Dataset):
         image = Image.open(img_path).convert('RGB')
         mask = Image.open(mask_path)
 
-        # Apply transforms to convert to tensors
-        image_tensor = cast(torch.Tensor, self.img_transform(image))
-        mask_tensor = cast(torch.Tensor, self.mask_transform(mask))
+        # Step 1: Resize so shortest side is at least crop_size
+        w, h = image.size
+        if w < h:
+            new_w = self.crop_size
+            new_h = int(h * self.crop_size / w)
+        else:
+            new_h = self.crop_size
+            new_w = int(w * self.crop_size / h)
 
-        # Apply data augmentation if enabled (on tensors)
+        image = image.resize((new_w, new_h), Image.BILINEAR)
+        mask = mask.resize((new_w, new_h), Image.NEAREST)
+
+        # Step 2: Crop to crop_size x crop_size
         if self.use_augmentation:
-            # Apply horizontal flip to both image and mask with same probability
-            if np.random.rand() < 0.5:
-                image_tensor = F.hflip(image_tensor)
-                mask_tensor = F.hflip(mask_tensor)
+            # Random crop for training
+            i = np.random.randint(0, new_h - self.crop_size + 1)
+            j = np.random.randint(0, new_w - self.crop_size + 1)
+        else:
+            # Top-left crop for validation
+            i = 0
+            j = 0
 
-            # Apply color jitter only to image (not mask)
-            color_jitter = transforms.ColorJitter(
-                brightness=0.3,
-                contrast=0.3,
-                saturation=0.3,
-                hue=0.1
-            )
-            image_tensor = color_jitter(image_tensor)
+        image = image.crop((j, i, j + self.crop_size, i + self.crop_size))
+        mask = mask.crop((j, i, j + self.crop_size, i + self.crop_size))
+
+        # Step 3: Apply augmentations if enabled
+        if self.use_augmentation:
+            # Random horizontal flip
+            if np.random.rand() < 0.5:
+                image = F.hflip(image)
+                mask = F.hflip(mask)
+
+            # Color jitter (only to image)
+            if self.color_jitter is not None:
+                image = self.color_jitter(image)
+
+        # Step 4: Convert to tensors
+        image_tensor = F.to_tensor(image)
+        mask_tensor = torch.from_numpy(np.array(mask)).long()
+
+        # Step 5: Normalize image
+        image_tensor = self.normalize(image_tensor)
 
         return image_tensor, mask_tensor
 
