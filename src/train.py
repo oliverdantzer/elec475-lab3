@@ -7,6 +7,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from pathlib import Path
 from tqdm import tqdm
 import os
+from torchmetrics import JaccardIndex
 
 from chungusnet import ChungusNet
 from dataset import create_dataloaders, dataset_path
@@ -82,41 +83,9 @@ def load_teacher_model(device):
     return teacher
 
 
-def compute_miou(pred, target, num_classes=21, ignore_index=255):
-    """
-    Compute mean Intersection over Union (mIoU)
-
-    Args:
-        pred: (B, C, H, W) prediction logits
-        target: (B, H, W) ground truth labels
-        num_classes: Number of classes
-        ignore_index: Index to ignore in computation
-
-    Returns:
-        mIoU value
-    """
-    pred = pred.argmax(dim=1)  # (B, H, W)
-
-    ious = []
-    for cls in range(num_classes):
-        pred_cls = (pred == cls)
-        target_cls = (target == cls)
-
-        # Ignore pixels with ignore_index
-        valid_mask = (target != ignore_index)
-        pred_cls = pred_cls & valid_mask
-        target_cls = target_cls & valid_mask
-
-        intersection = (pred_cls & target_cls).sum().float()
-        union = (pred_cls | target_cls).sum().float()
-
-        if union > 0:
-            ious.append((intersection / union).item())
-
-    return sum(ious) / len(ious) if ious else 0.0
 
 
-def train_epoch_solo(model, train_loader, criterion, optimizer, device, epoch):
+def train_epoch_solo(model, train_loader, criterion, optimizer, metric, device, epoch):
     """
     Train for one epoch in solo mode (standard training)
 
@@ -125,6 +94,7 @@ def train_epoch_solo(model, train_loader, criterion, optimizer, device, epoch):
         train_loader: Training data loader
         criterion: Loss function
         optimizer: Optimizer
+        metric: JaccardIndex metric
         device: Device to train on
         epoch: Current epoch number
 
@@ -132,8 +102,8 @@ def train_epoch_solo(model, train_loader, criterion, optimizer, device, epoch):
         Average loss for the epoch
     """
     model.train()
+    metric.reset()
     total_loss = 0.0
-    total_miou = 0.0
 
     pbar = tqdm(train_loader, desc=f"Epoch {epoch} [Solo]")
     for batch_idx, (images, targets) in enumerate(pbar):
@@ -151,22 +121,22 @@ def train_epoch_solo(model, train_loader, criterion, optimizer, device, epoch):
 
         # Metrics
         total_loss += loss.item()
-        miou = compute_miou(logits.detach(), targets)
-        total_miou += miou
+        preds = logits.argmax(dim=1)
+        metric.update(preds, targets)
 
         # Update progress bar
         pbar.set_postfix({
             'loss': f'{loss.item():.4f}',
             'avg_loss': f'{total_loss / (batch_idx + 1):.4f}',
-            'mIoU': f'{miou:.4f}'
+            'mIoU': f'{metric.compute().item():.4f}'
         })
 
     avg_loss = total_loss / len(train_loader)
-    avg_miou = total_miou / len(train_loader)
+    avg_miou = metric.compute().item()
     return avg_loss, avg_miou
 
 
-def train_epoch_distill(model, teacher, train_loader, criterion, optimizer, device, epoch):
+def train_epoch_distill(model, teacher, train_loader, criterion, optimizer, metric, device, epoch):
     """
     Train for one epoch in student-teacher mode (knowledge distillation)
 
@@ -176,6 +146,7 @@ def train_epoch_distill(model, teacher, train_loader, criterion, optimizer, devi
         train_loader: Training data loader
         criterion: Distillation loss function
         optimizer: Optimizer
+        metric: JaccardIndex metric
         device: Device to train on
         epoch: Current epoch number
 
@@ -183,10 +154,10 @@ def train_epoch_distill(model, teacher, train_loader, criterion, optimizer, devi
         Tuple of (avg_total_loss, avg_distill_loss, avg_gt_loss, avg_miou)
     """
     model.train()
+    metric.reset()
     total_loss = 0.0
     total_distill_loss = 0.0
     total_gt_loss = 0.0
-    total_miou = 0.0
 
     pbar = tqdm(train_loader, desc=f"Epoch {epoch} [Distill]")
     for batch_idx, (images, targets) in enumerate(pbar):
@@ -214,32 +185,33 @@ def train_epoch_distill(model, teacher, train_loader, criterion, optimizer, devi
         total_loss += loss.item()
         total_distill_loss += distill_loss
         total_gt_loss += gt_loss
-        miou = compute_miou(student_logits.detach(), targets)
-        total_miou += miou
+        preds = student_logits.argmax(dim=1)
+        metric.update(preds, targets)
 
         # Update progress bar
         pbar.set_postfix({
             'loss': f'{loss.item():.4f}',
             'distill': f'{distill_loss:.4f}',
             'gt': f'{gt_loss:.4f}',
-            'mIoU': f'{miou:.4f}'
+            'mIoU': f'{metric.compute().item():.4f}'
         })
 
     avg_loss = total_loss / len(train_loader)
     avg_distill = total_distill_loss / len(train_loader)
     avg_gt = total_gt_loss / len(train_loader)
-    avg_miou = total_miou / len(train_loader)
+    avg_miou = metric.compute().item()
 
     return avg_loss, avg_distill, avg_gt, avg_miou
 
 
-def validate(model, val_loader, device):
+def validate(model, val_loader, metric, device):
     """
     Validate the model
 
     Args:
         model: Model to validate
         val_loader: Validation data loader
+        metric: JaccardIndex metric
         device: Device to validate on
 
     Returns:
@@ -247,8 +219,8 @@ def validate(model, val_loader, device):
     """
     model.eval()
     criterion = nn.CrossEntropyLoss(ignore_index=255)
+    metric.reset()
     total_loss = 0.0
-    total_miou = 0.0
 
     with torch.no_grad():
         pbar = tqdm(val_loader, desc="Validation")
@@ -262,16 +234,16 @@ def validate(model, val_loader, device):
 
             # Metrics
             total_loss += loss.item()
-            miou = compute_miou(logits, targets)
-            total_miou += miou
+            preds = logits.argmax(dim=1)
+            metric.update(preds, targets)
 
             pbar.set_postfix({
                 'loss': f'{loss.item():.4f}',
-                'mIoU': f'{miou:.4f}'
+                'mIoU': f'{metric.compute().item():.4f}'
             })
 
     avg_loss = total_loss / len(val_loader)
-    avg_miou = total_miou / len(val_loader)
+    avg_miou = metric.compute().item()
 
     return avg_loss, avg_miou
 
@@ -331,6 +303,10 @@ def main():
     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
+    # Setup metrics
+    train_metric = JaccardIndex(task='multiclass', num_classes=21, ignore_index=255).to(device)
+    val_metric = JaccardIndex(task='multiclass', num_classes=21, ignore_index=255).to(device)
+
     print(f"\nOptimizer: AdamW (lr={args.lr}, weight_decay=1e-4)")
     print(f"Scheduler: CosineAnnealingLR (T_max={args.epochs}, eta_min=1e-6)")
     print(f"Epochs: {args.epochs}")
@@ -347,17 +323,17 @@ def main():
         # Train
         if args.mode == 'solo':
             train_loss, train_miou = train_epoch_solo(
-                model, train_loader, criterion, optimizer, device, epoch
+                model, train_loader, criterion, optimizer, train_metric, device, epoch
             )
             print(f"Train Loss: {train_loss:.4f} | Train mIoU: {train_miou:.4f}")
         else:
             train_loss, distill_loss, gt_loss, train_miou = train_epoch_distill(
-                model, teacher, train_loader, criterion, optimizer, device, epoch
+                model, teacher, train_loader, criterion, optimizer, train_metric, device, epoch
             )
             print(f"Train Loss: {train_loss:.4f} (Distill: {distill_loss:.4f}, GT: {gt_loss:.4f}) | Train mIoU: {train_miou:.4f}")
 
         # Validate
-        val_loss, val_miou = validate(model, val_loader, device)
+        val_loss, val_miou = validate(model, val_loader, val_metric, device)
         print(f"Val Loss: {val_loss:.4f} | Val mIoU: {val_miou:.4f}")
 
         # Step scheduler
