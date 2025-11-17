@@ -2,3 +2,4 @@ kagglehub
 typer
 torchvision
 torchmetrics
+python-dotenv
