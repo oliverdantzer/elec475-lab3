@@ -42,7 +42,8 @@ def main(model_id: Literal["resnet50-fcn", "chungusnet"], batch_size: int, param
 
     total_images = len(val_dataset)
     images_tested = 0
-    last_log_time = time.time()
+    start_test_time = time.time()
+    last_log_time = start_test_time
 
     print(f"Testing {model_id} on validation set...")
     print(f"Device: {device}")
@@ -77,7 +78,10 @@ def main(model_id: Literal["resnet50-fcn", "chungusnet"], batch_size: int, param
             if current_time - last_log_time >= 15:
                 current_miou = np.mean([score for _, score in miou_scores])
                 percent_complete = (images_tested / total_images) * 100
-                print(f"Progress: {images_tested}/{total_images} images ({percent_complete:.1f}%) | Current mIoU: {current_miou:.4f}")
+                elapsed_time = current_time - start_test_time
+                elapsed_mins = int(elapsed_time // 60)
+                elapsed_secs = int(elapsed_time % 60)
+                print(f"Progress: {images_tested}/{total_images} images ({percent_complete:.1f}%) | Current mIoU: {current_miou:.4f} | Time: {elapsed_mins}m {elapsed_secs}s")
                 last_log_time = current_time
 
     # Sort by mIoU score
