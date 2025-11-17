@@ -513,6 +513,9 @@ def main(
     device: str = "cuda",
     distill_method: Literal["response", "feature"] = "response"
 ):
+    # Create weights directory if it doesn't exist
+    weights_path = Path(weights_file)
+    weights_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Setup device
     device = torch.device(device if torch.cuda.is_available() else 'cpu')
