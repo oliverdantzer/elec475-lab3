@@ -12,7 +12,7 @@ from torchmetrics import JaccardIndex
 import matplotlib.pyplot as plt
 
 from chungusnet import ChungusNet
-from dataset import create_dataloaders, dataset_path
+from dataset import create_dataloaders
 from torchvision.models.segmentation import fcn_resnet50, FCN_ResNet50_Weights
 
 
@@ -526,7 +526,6 @@ def main(
     # Create dataloaders
     print("Loading dataset...")
     train_loader, val_loader = create_dataloaders(
-        root_dir=str(dataset_path),
         batch_size=batch_size,
         num_workers=num_workers,
         use_augmentation=True

@@ -14,14 +14,6 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-# Get dataset path from environment variable
-dataset_path = Path(os.getenv("DATASET_PATH", ""))
-if not dataset_path or not dataset_path.exists():
-    raise ValueError(
-        "DATASET_PATH not found in .env file or path doesn't exist. "
-        "Please run download_dataset.py first to download the dataset and create the .env file."
-    )
-
 
 class VOC2012SegmentationDataset(Dataset):
     """
@@ -43,13 +35,19 @@ class VOC2012SegmentationDataset(Dataset):
 
     def __init__(
         self,
-        root_dir: str,
         split: str = 'train',
         use_augmentation: bool = False,
         crop_size: int = 520,
     ):
-        self.root_dir = Path(root_dir) / \
-            "versions/1/VOC2012_train_val/VOC2012_train_val"
+        # Get dataset path from environment variable
+        dataset_path = Path(os.getenv("DATASET_PATH", ""))
+        if not dataset_path or not dataset_path.exists():
+            raise ValueError(
+                "DATASET_PATH not found in .env file or path doesn't exist. "
+                "Please run download_dataset.py first to download the dataset and create the .env file."
+            )
+
+        self.root_dir = dataset_path
         self.split = split
         self.use_augmentation = use_augmentation
         self.crop_size = crop_size
@@ -146,7 +144,6 @@ class VOC2012SegmentationDataset(Dataset):
 
 
 def create_dataloaders(
-    root_dir: str,
     batch_size: int = 8,
     num_workers: int = 0,
     crop_size: int = 520,
@@ -156,7 +153,6 @@ def create_dataloaders(
     Create train and validation dataloaders
 
     Args:
-        root_dir: Root directory of the dataset
         batch_size: Batch size for dataloaders
         num_workers: Number of workers for data loading
         crop_size: Size to crop images to (images resized so shortest side >= crop_size, then cropped)
@@ -167,14 +163,12 @@ def create_dataloaders(
     """
     # Create datasets
     train_dataset = VOC2012SegmentationDataset(
-        root_dir=root_dir,
         split='train',
         use_augmentation=use_augmentation,
         crop_size=crop_size,
     )
 
     val_dataset = VOC2012SegmentationDataset(
-        root_dir=root_dir,
         split='val',
         use_augmentation=False,  # Never augment validation set
         crop_size=crop_size,
@@ -202,11 +196,12 @@ def create_dataloaders(
 
 # Main execution
 if __name__ == "__main__":
+    # Get dataset path from environment
+    dataset_path = Path(os.getenv("DATASET_PATH", ""))
     print(f"Dataset path: {dataset_path}")
 
     # Create dataloaders
     train_loader, val_loader = create_dataloaders(
-        root_dir=str(dataset_path),
         batch_size=8,
         crop_size=520
     )

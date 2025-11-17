@@ -5,7 +5,7 @@ import time
 import numpy as np
 from torch.utils.data import DataLoader
 from torchmetrics import JaccardIndex
-from dataset import VOC2012SegmentationDataset, dataset_path
+from dataset import VOC2012SegmentationDataset
 
 
 def main(model_id: Literal["resnet50-fcn", "chungusnet"], batch_size: int, params_file: Optional[str] = None):
@@ -27,7 +27,6 @@ def main(model_id: Literal["resnet50-fcn", "chungusnet"], batch_size: int, param
     model.eval()
 
     val_dataset = VOC2012SegmentationDataset(
-        root_dir=str(dataset_path),
         split='val',
         use_augmentation=False
     )
