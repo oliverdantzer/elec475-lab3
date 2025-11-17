@@ -8,6 +8,7 @@ from pathlib import Path
 from tqdm import tqdm
 import os
 from torchmetrics import JaccardIndex
+import matplotlib.pyplot as plt
 
 from chungusnet import ChungusNet
 from dataset import create_dataloaders, dataset_path
@@ -248,6 +249,43 @@ def validate(model, val_loader, metric, device):
     return avg_loss, avg_miou
 
 
+def save_miou_plot(train_mious, val_mious, weights_file):
+    """
+    Create and save a plot of train and validation mIoU over epochs
+
+    Args:
+        train_mious: List of training mIoU values per epoch
+        val_mious: List of validation mIoU values per epoch
+        weights_file: Path to weights file (used to generate plot filename)
+    """
+    # Create plots directory if it doesn't exist
+    plots_dir = Path('plots')
+    plots_dir.mkdir(exist_ok=True)
+
+    # Generate plot filename from weights filename
+    weights_path = Path(weights_file)
+    plot_filename = weights_path.stem + '_miou.png'
+    plot_path = plots_dir / plot_filename
+
+    # Create the plot
+    plt.figure(figsize=(10, 6))
+    epochs = range(1, len(train_mious) + 1)
+    plt.plot(epochs, train_mious, 'b-', label='Train mIoU', linewidth=2)
+    plt.plot(epochs, val_mious, 'r-', label='Validation mIoU', linewidth=2)
+    plt.xlabel('Epoch', fontsize=12)
+    plt.ylabel('mIoU', fontsize=12)
+    plt.title('Training and Validation mIoU over Epochs', fontsize=14, fontweight='bold')
+    plt.legend(fontsize=11)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    # Save the plot
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+    print(f"\nPlot saved to: {plot_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Train ChungusNet for semantic segmentation')
     parser.add_argument('--mode', type=str, required=True, choices=['solo', 'student-teacher'],
@@ -314,6 +352,8 @@ def main():
 
     # Training loop
     best_miou = 0.0
+    train_mious = []
+    val_mious = []
 
     for epoch in range(1, args.epochs + 1):
         print(f"\n{'='*60}")
@@ -335,6 +375,10 @@ def main():
         # Validate
         val_loss, val_miou = validate(model, val_loader, val_metric, device)
         print(f"Val Loss: {val_loss:.4f} | Val mIoU: {val_miou:.4f}")
+
+        # Track metrics
+        train_mious.append(train_miou)
+        val_mious.append(val_miou)
 
         # Step scheduler
         scheduler.step()
@@ -372,6 +416,9 @@ def main():
     print(f"Best validation mIoU: {best_miou:.4f}")
     print(f"Model saved to: {args.weights_file}")
     print(f"{'='*60}")
+
+    # Save mIoU plot
+    save_miou_plot(train_mious, val_mious, args.weights_file)
 
 
 if __name__ == '__main__':
