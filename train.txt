@@ -1,0 +1,16 @@
+# Training Instructions for Semantic Segmentation Models
+pip install -r requirements.txt
+python src/download_dataset.py
+
+## ChungusNet without knowledge distillation
+python src/train.py solo weights/chungus_solo.pth --epochs 20 --batch-size 8 --lr 1e-3
+
+## ChungusNet - Student-Teacher Mode (Response-Based Distillation)
+# Train ChungusNet using response-based distillation (KL divergence on output logits)
+# Uses FCN-ResNet50 as teacher model
+python src/train.py student-teacher weights/chungus_response.pth --epochs 20 --batch-size 8 --lr 1e-3 --distill-method response
+
+## ChungusNet - Student-Teacher Mode (Feature-Based Distillation)
+# Train ChungusNet using feature-based distillation (cosine similarity on intermediate features)
+# Uses FCN-ResNet50 as teacher model
+python src/train.py student-teacher weights/chungus_feature.pth --epochs 20 --batch-size 8 --lr 1e-3 --distill-method feature

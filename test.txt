@@ -1,0 +1,15 @@
+# Testing Instructions for Semantic Segmentation Models
+pip install -r requirements.txt
+python src/download_dataset.py
+
+## ResNet50-FCN (Pretrained)
+python src/test.py resnet50-fcn 8
+
+## ChungusNet without knowledge distillation
+python src/test.py chungusnet 8 --params-file weights/chungus_solo.pth
+
+## ChungusNet - Response-Based Distillation
+python src/test.py chungusnet 8 --params-file weights/chungus_response.pth
+
+## ChungusNet - Feature-Based Distillation
+python src/test.py chungusnet 8 --params-file weights/chungus_feature.pth
