@@ -21,7 +21,12 @@ def main(model_id: Literal["resnet50-fcn", "chungusnet"], batch_size: int, param
         else:
             from chungusnet import ChungusNet
             model = ChungusNet()
-            model.load_state_dict(torch.load(params_file, map_location=device))
+            checkpoint = torch.load(params_file, map_location=device)
+            # Handle both full checkpoint and raw state_dict formats
+            if 'model_state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['model_state_dict'])
+            else:
+                model.load_state_dict(checkpoint)
 
     model = model.to(device)
     model.eval()
