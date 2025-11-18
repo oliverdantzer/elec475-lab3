@@ -57,21 +57,21 @@ class ChungusNet(nn.Module):
         # - features[7-12]: Later layers (stride 16)
         # - features[13-16]: Final layers (stride 32, but we stop earlier)
 
-        self.features = backbone.features
+        features = backbone.features
 
         # Use only 2 taps for lighter architecture
         # Assuming input is 520x520:
         # - Tap 1 (early): 65x65 (stride 8) - features[:4]
-        # - Tap 2 (bottleneck): ~14x14 (stride ~37) - features[:12]
+        # - Tap 2 (bottleneck): ~17x17 (stride ~30) - features[:10]
 
         # Define channel dimensions
         # MobileNetV3-Small channel progression: 16, 16, 24, 48, 96
         self.early_channels = 24   # features[:4]
-        self.bottleneck_channels = 96  # features[:12] (chopped backbone)
+        self.bottleneck_channels = 96  # features[:10] (chopped backbone)
 
-        # Encoder with only 2 stages
-        self.encoder_early = nn.Sequential(*self.features[:4])  # -> 65x65x24
-        self.encoder_bottleneck = nn.Sequential(*self.features[4:12]) # -> 17x17x96
+        # Encoder with only 2 stages (only keep the layers we need)
+        self.encoder_early = nn.Sequential(*features[:4])  # -> 65x65x24
+        self.encoder_bottleneck = nn.Sequential(*features[4:10]) # -> 17x17x96
 
         # Lightweight decoder with only 2 taps
         # Decoder path: 17x17 -> 65x65 -> 520x520
