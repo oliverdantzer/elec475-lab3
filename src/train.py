@@ -609,6 +609,9 @@ def main(
         train_mious.append(train_miou)
         val_mious.append(val_miou)
 
+        # Save mIoU plot (overwrite each epoch)
+        save_miou_plot(train_mious, val_mious, weights_file)
+
         # Step scheduler
         scheduler.step()
 
@@ -651,9 +654,6 @@ def main(
     print(f"Best validation mIoU: {best_miou:.4f}")
     print(f"Model saved to: {weights_file}")
     print(f"{'='*60}")
-
-    # Save mIoU plot
-    save_miou_plot(train_mious, val_mious, weights_file)
 
 
 if __name__ == '__main__':
